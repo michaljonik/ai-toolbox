@@ -18,7 +18,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
 
 @mcp.tool()
-def trans_yt(video_id: str, lang: str = "pl,en") -> dict:
+def youtube_transcript(video_id: str, lang: str = "pl,en") -> dict:
     """
     Fetch YouTube video transcript and metadata.
 

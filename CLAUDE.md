@@ -11,7 +11,7 @@ app/
   services/        # shared business logic — add new tools here first
     youtube.py     # fetch_video_data(video_id, languages) -> dict
   routes/          # Flask blueprints (one file per tool)
-    trans_yt.py
+    youtube_transcript.py
   __init__.py      # Flask app factory, registers blueprints + /health
   auth.py          # API key middleware for Flask (reads API_KEY env var)
 mcp_server.py      # FastMCP server — registers tools, adds auth middleware

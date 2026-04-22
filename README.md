@@ -34,7 +34,7 @@ If `API_KEY` is empty or unset, auth is disabled.
 
 ## REST API
 
-### `GET /trans-yt`
+### `GET /youtube_transcript`
 
 Fetch YouTube video transcript and metadata.
 
@@ -48,9 +48,9 @@ Fetch YouTube video transcript and metadata.
 **Example:**
 
 ```bash
-curl "http://localhost:5000/trans-yt?id=dQw4w9WgXcQ&lang=en"
+curl "http://localhost:5000/youtube_transcript?id=dQw4w9WgXcQ&lang=en"
 # with auth:
-curl -H "X-API-Key: your-key" "http://localhost:5000/trans-yt?id=dQw4w9WgXcQ"
+curl -H "X-API-Key: your-key" "http://localhost:5000/youtube_transcript?id=dQw4w9WgXcQ"
 ```
 
 **Response:**
@@ -83,7 +83,7 @@ The MCP server runs on port 8000 using the Streamable HTTP transport.
 
 ### Available tools
 
-#### `trans_yt`
+#### `youtube_transcript`
 
 ```
 video_id: str       — YouTube video ID

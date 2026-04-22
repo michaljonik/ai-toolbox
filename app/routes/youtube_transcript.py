@@ -1,11 +1,11 @@
 from flask import Blueprint, request, jsonify
 from app.services.youtube import fetch_video_data
 
-trans_yt_bp = Blueprint("trans_yt", __name__)
+youtube_transcript_bp = Blueprint("youtube_transcript", __name__)
 
 
-@trans_yt_bp.route("/trans-yt")
-def trans_yt():
+@youtube_transcript_bp.route("/youtube_transcript")
+def youtube_transcript():
     video_id = request.args.get("id")
     if not video_id:
         return jsonify({"error": "Missing required parameter: id"}), 400

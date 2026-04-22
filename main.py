@@ -1,5 +1,6 @@
 import os
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -7,8 +8,17 @@ from mcp.server.fastmcp import FastMCP
 
 from app.services.youtube import fetch_video_data
 
-app = FastAPI(title="ai-toolbox", redirect_slashes=False)
 mcp = FastMCP("ai-toolbox")
+mcp_asgi = mcp.streamable_http_app()  # initializes session manager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with mcp.session_manager.run():
+        yield
+
+
+app = FastAPI(title="ai-toolbox", redirect_slashes=False, lifespan=lifespan)
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -32,7 +42,7 @@ def health():
 
 
 @app.get("/youtube_transcript")
-def youtube_transcript(
+def youtube_transcript_rest(
     video_id: str = Query(alias="id"),
     lang: str = "pl,en",
 ):
@@ -58,7 +68,9 @@ def youtube_transcript(video_id: str, lang: str = "pl,en") -> dict:
     return fetch_video_data(video_id, lang.split(","))
 
 
-app.mount("/mcp", mcp.streamable_http_app())
+# Mount at "/" so the sub-app receives the full path "/mcp"
+# matching FastMCP's internal route. Explicit routes above take priority.
+app.mount("/", mcp_asgi)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

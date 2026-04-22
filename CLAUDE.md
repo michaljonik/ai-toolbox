@@ -2,7 +2,10 @@
 
 ## What this is
 
-A self-hosted toolbox for AI agents. Exposes tools as both a REST API (Flask, port 5000) and an MCP server (FastMCP Streamable HTTP, port 8000). Both use the same service logic.
+A self-hosted toolbox for AI agents. Single FastAPI + FastMCP server on port 8000:
+- `/youtube_transcript` — REST endpoint
+- `/mcp` — MCP Streamable HTTP endpoint
+- `/health` — always public, no auth
 
 ## Project layout
 
@@ -10,67 +13,52 @@ A self-hosted toolbox for AI agents. Exposes tools as both a REST API (Flask, po
 app/
   services/        # shared business logic — add new tools here first
     youtube.py     # fetch_video_data(video_id, languages) -> dict
-  routes/          # Flask blueprints (one file per tool)
-    youtube_transcript.py
-  __init__.py      # Flask app factory, registers blueprints + /health
-  auth.py          # API key middleware for Flask (reads API_KEY env var)
-mcp_server.py      # FastMCP server — registers tools, adds auth middleware
-app.py             # Flask entry point
+main.py            # single entrypoint: FastAPI app + MCP tools + auth middleware
 ```
 
 ## How to add a new tool
 
-1. Create `app/services/<tool>.py` with the core logic as a plain function
-2. Create `app/routes/<tool>.py` with a Flask Blueprint calling that function
-3. Register the blueprint in `app/__init__.py`
-4. Add a `@mcp.tool()` in `mcp_server.py` calling the same service function
-5. Update README.md (tool table + usage example)
+1. Create `app/services/<name>.py` with core logic as a plain function
+2. Add `@app.get("/<name>")` REST route in `main.py`
+3. Add `@mcp.tool()` in `main.py` calling the same service function
+4. Update README.md
 
 ## Auth
 
-- Controlled by `API_KEY` env var
-- Flask: `app/auth.py` runs as `before_request`, returns 401 if key wrong
-- MCP: `APIKeyMiddleware` (Starlette `BaseHTTPMiddleware`) wraps the FastMCP ASGI app
-- If `API_KEY` is empty/unset, auth is disabled for both
+Single `APIKeyMiddleware` (Starlette `BaseHTTPMiddleware`) on the FastAPI app covers both REST and MCP endpoints. `/health` is in `_public` set and always bypasses auth. Controlled by `API_KEY` env var — disabled when empty.
 
-## Running locally (no Docker)
+## Running locally
 
 ```bash
-# Flask API
-python app.py
-
-# MCP server
-python mcp_server.py
-
-# Both need packages from requirements.txt
 pip install -r requirements.txt
+python3 main.py
+# → http://localhost:8000
 ```
 
 ## Running with Docker
 
 ```bash
 cp .env.example .env
-docker compose up --build
-# api → localhost:5000
-# mcp → localhost:8000/mcp
+docker compose up
 ```
 
 ## Key dependencies
 
 | Package | Why |
 |---------|-----|
+| `fastapi` | REST API framework (ASGI) |
+| `mcp[cli]` | FastMCP server + MCP protocol |
+| `uvicorn` | ASGI server for both FastAPI and MCP |
 | `yt-dlp` | YouTube metadata (title, channel, views, etc.) |
 | `youtube-transcript-api` | Transcript fetch — no API key needed |
-| `mcp[cli]` | FastMCP server + MCP protocol implementation |
-| `uvicorn` | ASGI server for the MCP HTTP transport |
-| `gunicorn` | WSGI server for Flask in production |
 
 ## CI
 
-GitHub Actions (`.github/workflows/docker.yml`) builds and pushes to GHCR on every push to `main`. Uses `docker/setup-buildx-action` (required for GHA cache support with the default Docker driver).
+GitHub Actions (`.github/workflows/docker.yml`) builds and pushes to GHCR on every push to `main`. Requires `docker/setup-buildx-action` step — without it, GHA cache export fails with the default Docker driver.
 
 ## Things to watch out for
 
-- `yt-dlp` version must exist on PyPI — version numbers follow a date format (`YYYY.MM.DD`) and not all dates have releases
-- The MCP endpoint is `/mcp` (FastMCP default for streamable HTTP transport)
-- Both services share the same Docker image; `mcp` service overrides CMD in docker-compose
+- `yt-dlp` version must exist on PyPI — version numbers follow date format (`YYYY.MM.DD`), not all dates have releases
+- MCP endpoint is at `/mcp` (FastMCP default for streamable HTTP)
+- The `@mcp.tool()` function name becomes the tool name visible to the AI agent — keep it descriptive
+- `app.mount("/mcp", ...)` must come **after** all `@app.get()` route definitions

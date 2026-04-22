@@ -1,20 +1,14 @@
 import os
 import uvicorn
-from mcp.server.fastmcp import FastMCP
+from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
-
-from starlette.requests import Request
-from starlette.responses import JSONResponse as StarletteJSONResponse
-from starlette.routing import Route
+from mcp.server.fastmcp import FastMCP
 
 from app.services.youtube import fetch_video_data
 
+app = FastAPI(title="ai-toolbox")
 mcp = FastMCP("ai-toolbox")
-
-
-async def health(request: Request):
-    return StarletteJSONResponse({"status": "ok"})
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -27,6 +21,25 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if api_key and request.headers.get("X-API-Key") != api_key:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
         return await call_next(request)
+
+
+app.add_middleware(APIKeyMiddleware)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/youtube_transcript")
+def youtube_transcript(
+    video_id: str = Query(alias="id"),
+    lang: str = "pl,en",
+):
+    try:
+        return fetch_video_data(video_id, lang.split(","))
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
 
 @mcp.tool()
@@ -45,16 +58,7 @@ def youtube_transcript(video_id: str, lang: str = "pl,en") -> dict:
     return fetch_video_data(video_id, lang.split(","))
 
 
-if __name__ == "__main__":
-    from starlette.applications import Starlette
-    from starlette.middleware import Middleware
-    from starlette.routing import Mount
+app.mount("/mcp", mcp.streamable_http_app())
 
-    app = Starlette(
-        routes=[
-            Route("/health", health),
-            Mount("/", app=mcp.streamable_http_app()),
-        ],
-        middleware=[Middleware(APIKeyMiddleware)],
-    )
+if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

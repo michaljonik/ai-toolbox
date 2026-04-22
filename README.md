@@ -1,28 +1,27 @@
 # ai-toolbox
 
-A self-hosted API and MCP server providing tools for AI agents. Currently exposes one tool: fetching YouTube video transcripts and metadata.
+A self-hosted toolbox for AI agents. Exposes tools as both a REST API and MCP server — on a single port.
 
 ## Architecture
 
-Two services, one Docker image:
+One service, one port (8000):
 
-| Service | Port | Protocol | Use case |
-|---------|------|----------|----------|
-| `api`   | 5000 | REST HTTP | Direct HTTP calls, n8n HTTP node, testing |
-| `mcp`   | 8000 | MCP (Streamable HTTP) | Claude Desktop, n8n MCP node, any MCP client |
+| Endpoint | Protocol | Use case |
+|----------|----------|----------|
+| `/youtube_transcript` | REST HTTP | Direct HTTP calls, n8n HTTP node, testing |
+| `/mcp` | MCP (Streamable HTTP) | Claude Desktop, n8n MCP node, any MCP client |
+| `/health` | HTTP | Docker healthcheck (no auth required) |
 
-Both share the same underlying logic (`app/services/`).
-
-## Running locally
+## Running
 
 ```bash
 cp .env.example .env       # optionally set API_KEY
-docker compose up --build
+docker compose up
 ```
 
 ## Authentication
 
-Set `API_KEY` in `.env`. When set, all requests must include:
+Set `API_KEY` in `.env`. When set, all requests (except `/health`) must include:
 
 ```
 X-API-Key: your-key-here
@@ -48,9 +47,9 @@ Fetch YouTube video transcript and metadata.
 **Example:**
 
 ```bash
-curl "http://localhost:5000/youtube_transcript?id=dQw4w9WgXcQ&lang=en"
+curl "http://localhost:8000/youtube_transcript?id=dQw4w9WgXcQ&lang=en"
 # with auth:
-curl -H "X-API-Key: your-key" "http://localhost:5000/youtube_transcript?id=dQw4w9WgXcQ"
+curl -H "X-API-Key: your-key" "http://localhost:8000/youtube_transcript?id=dQw4w9WgXcQ"
 ```
 
 **Response:**
@@ -69,28 +68,20 @@ curl -H "X-API-Key: your-key" "http://localhost:5000/youtube_transcript?id=dQw4w
 }
 ```
 
-### `GET /health`
-
-Returns `{"status": "ok"}`. Used by Docker healthcheck.
-
 ---
 
 ## MCP Server
 
-The MCP server runs on port 8000 using the Streamable HTTP transport.
-
-**MCP endpoint:** `http://localhost:8000/mcp`
+**Endpoint:** `http://localhost:8000/mcp`
 
 ### Available tools
 
 #### `youtube_transcript`
 
 ```
-video_id: str       — YouTube video ID
-lang: str = "pl,en" — comma-separated language codes, priority order
+video_id: str        — YouTube video ID
+lang: str = "pl,en"  — comma-separated language codes, priority order
 ```
-
-Returns the same fields as the REST endpoint.
 
 ### Connecting Claude Desktop
 
@@ -117,17 +108,13 @@ Use the **MCP Client** node with:
 - URL: `http://<host>:8000/mcp`
 - Header: `X-API-Key: your-key`
 
-### Connecting from a remote machine
-
-The MCP server accepts HTTP connections, so it works across machines. Point the client at your server's IP/hostname instead of `localhost`.
-
 ---
 
 ## Adding a new tool
 
 1. Add shared logic to `app/services/<name>.py`
-2. Add Flask route in `app/routes/<name>.py` and register it in `app/__init__.py`
-3. Add MCP tool in `mcp_server.py` using `@mcp.tool()`
+2. Add REST route in `main.py` (`@app.get(...)`)
+3. Add MCP tool in `main.py` (`@mcp.tool()`)
 4. Update this README
 
 ## CI/CD

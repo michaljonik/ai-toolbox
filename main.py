@@ -5,10 +5,14 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from app.services.youtube import fetch_video_data
 
-mcp = FastMCP("ai-toolbox")
+mcp = FastMCP(
+    "ai-toolbox",
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+)
 mcp_asgi = mcp.streamable_http_app()  # initializes session manager
 
 

@@ -7,7 +7,7 @@ from mcp.server.fastmcp import FastMCP
 
 from app.services.youtube import fetch_video_data
 
-app = FastAPI(title="ai-toolbox")
+app = FastAPI(title="ai-toolbox", redirect_slashes=False)
 mcp = FastMCP("ai-toolbox")
 
 

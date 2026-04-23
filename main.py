@@ -4,7 +4,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
@@ -36,30 +36,44 @@ def _api_key() -> str:
     return os.environ.get("API_KEY", "")
 
 
-def _is_authorized(request: Request) -> bool:
-    api_key = _api_key()
-    if not api_key:
-        return True  # auth disabled
+class APIKeyMiddleware:
+    """Pure ASGI middleware — passes scope/receive/send straight through.
 
-    # X-API-Key header (legacy)
-    if request.headers.get("X-API-Key") == api_key:
-        return True
+    Unlike BaseHTTPMiddleware, this does not wrap the inner app in an extra
+    task group, so it is safe with SSE/streaming responses (no interference
+    with Caddy proxy cancel signals that would otherwise destroy MCP sessions).
+    """
 
-    # Bearer token
-    auth = request.headers.get("Authorization", "")
-    if auth.startswith("Bearer ") and auth[7:] == api_key:
-        return True
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
-    return False
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
+        path = scope.get("path", "")
+        if path in _PUBLIC_PATHS:
+            await self.app(scope, receive, send)
+            return
 
-class APIKeyMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        if request.url.path in _PUBLIC_PATHS:
-            return await call_next(request)
-        if not _is_authorized(request):
-            return JSONResponse({"error": "Unauthorized"}, status_code=401)
-        return await call_next(request)
+        headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
+        api_key = _api_key()
+        authorized = True
+        if api_key:
+            x_api_key = headers.get("x-api-key", "")
+            auth_header = headers.get("authorization", "")
+            bearer = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+            authorized = secrets.compare_digest(x_api_key, api_key) or (
+                bool(bearer) and secrets.compare_digest(bearer, api_key)
+            )
+
+        if not authorized:
+            response = JSONResponse({"error": "Unauthorized"}, status_code=401)
+            await response(scope, receive, send)
+            return
+
+        await self.app(scope, receive, send)
 
 
 app.add_middleware(APIKeyMiddleware)

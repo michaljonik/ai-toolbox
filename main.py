@@ -15,7 +15,6 @@ mcp = FastMCP(
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 mcp_asgi = mcp.streamable_http_app()  # Streamable HTTP transport (MCP 2025-03-26)
-mcp_sse_asgi = mcp.sse_app()          # SSE transport (legacy, for n8n / older clients)
 
 
 @asynccontextmanager
@@ -161,12 +160,13 @@ def youtube_transcript(video_id: str, lang: str = "pl,en") -> dict:
 # Mount MCP transports
 # Explicit routes above take priority over mounted sub-apps.
 #
-# Streamable HTTP → POST/GET /mcp   (MCP 2025-03-26, Claude Desktop, n8n ≥ 1.68)
-# SSE             → GET /sse        (legacy transport, older n8n / LangChain)
+# Must be mounted at "/" — FastAPI strips the mount prefix before passing the
+# request to the sub-app, so mounting at "/mcp" would strip the prefix and
+# the sub-app would receive "/" instead of "/mcp", causing 404.
+# Explicit routes defined above always take priority over this catch-all.
 # ---------------------------------------------------------------------------
 
-app.mount("/mcp", mcp_asgi)
-app.mount("/sse", mcp_sse_asgi)
+app.mount("/", mcp_asgi)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

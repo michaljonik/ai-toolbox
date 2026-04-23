@@ -13,6 +13,7 @@ from app.services.youtube import fetch_video_data
 mcp = FastMCP(
     "ai-toolbox",
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    stateless_http=True,
 )
 mcp_asgi = mcp.streamable_http_app()  # Streamable HTTP transport (MCP 2025-03-26)
 
